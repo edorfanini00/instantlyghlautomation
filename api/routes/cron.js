@@ -9,8 +9,8 @@ const router = express.Router();
  * GET /api/cron/daily-report
  *
  * Triggered by Vercel Cron at 8 AM UTC daily.
- * Aggregates engagement events from the last 24 hours and emails
- * a summary report to the sales team.
+ * Sends SEPARATE report emails per pipeline — one for Food man, one for Enterpryze, etc.
+ * Same recipients, same timing, different content.
  */
 router.get('/daily-report', async (req, res) => {
   try {
@@ -23,7 +23,7 @@ router.get('/daily-report', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    console.log('[cron] Generating daily engagement report...');
+    console.log('[cron] Generating daily engagement reports...');
 
     // ── Gather events ─────────────────────────────────────────
     const events = eventStore.getEventsLast24h();
@@ -33,23 +33,16 @@ router.get('/daily-report', async (req, res) => {
       return res.status(200).json({ status: 'skipped', reason: 'No events in the last 24h' });
     }
 
-    // ── Aggregate by type ─────────────────────────────────────
-    const summary = {
-      email_opened: [],
-      email_link_clicked: [],
-      reply_received: [],
-    };
-
+    // ── Group events by pipeline ──────────────────────────────
+    const eventsByPipeline = {};
     for (const event of events) {
-      if (summary[event.eventType]) {
-        summary[event.eventType].push(event);
+      const pipelineName = event.pipelineName || 'Food man email';
+      if (!eventsByPipeline[pipelineName]) {
+        eventsByPipeline[pipelineName] = [];
       }
+      eventsByPipeline[pipelineName].push(event);
     }
 
-    // ── Build HTML email ──────────────────────────────────────
-    const html = buildReportHtml(summary, events.length);
-
-    // ── Send to each sales team member ────────────────────────
     const reportDate = new Date().toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -57,37 +50,56 @@ router.get('/daily-report', async (req, res) => {
       day: 'numeric',
     });
 
-    const subject = `📊 Instantly Campaign Report — ${reportDate}`;
-
-    // Send one email to the primary recipient, CC the rest
     const [primaryEmail, ...ccEmails] = config.salesTeamEmails;
+    const results = [];
 
-    try {
-      // Ensure the primary recipient exists as a contact in GHL
-      const contact = await ghl.upsertContact(primaryEmail, {
-        tags: ['internal-team'],
-      });
+    // ── Send a separate report for each pipeline ──────────────
+    for (const [pipelineName, pipelineEvents] of Object.entries(eventsByPipeline)) {
+      try {
+        // Aggregate by event type
+        const summary = {
+          email_opened: [],
+          email_link_clicked: [],
+          reply_received: [],
+        };
 
-      await ghl.sendEmail({
-        contactId: contact.id,
-        emailTo: primaryEmail,
-        emailCc: ccEmails,
-        subject,
-        html,
-      });
+        for (const event of pipelineEvents) {
+          if (summary[event.eventType]) {
+            summary[event.eventType].push(event);
+          }
+        }
 
-      console.log(`[cron] Report sent to ${primaryEmail}, CC: ${ccEmails.join(', ')}`);
+        const html = buildReportHtml(summary, pipelineEvents.length, pipelineName);
+        const subject = `📊 ${pipelineName} Report — ${reportDate}`;
 
-      return res.status(200).json({
-        status: 'ok',
-        eventCount: events.length,
-        to: primaryEmail,
-        cc: ccEmails,
-      });
-    } catch (err) {
-      console.error(`[cron] Failed to send report:`, err.message);
-      return res.status(500).json({ error: err.message });
+        // Ensure the primary recipient exists as a contact in GHL
+        const contact = await ghl.upsertContact(primaryEmail, {
+          tags: ['internal-team'],
+        });
+
+        await ghl.sendEmail({
+          contactId: contact.id,
+          emailTo: primaryEmail,
+          emailCc: ccEmails,
+          subject,
+          html,
+        });
+
+        console.log(`[cron] ${pipelineName} report sent (${pipelineEvents.length} events)`);
+        results.push({ pipeline: pipelineName, eventCount: pipelineEvents.length, sent: true });
+      } catch (err) {
+        console.error(`[cron] Failed to send ${pipelineName} report:`, err.message);
+        results.push({ pipeline: pipelineName, sent: false, error: err.message });
+      }
     }
+
+    return res.status(200).json({
+      status: 'ok',
+      totalEvents: events.length,
+      to: primaryEmail,
+      cc: ccEmails,
+      reports: results,
+    });
   } catch (err) {
     console.error('[cron] Error generating daily report:', err.message);
     return res.status(500).json({ error: err.message });
@@ -98,7 +110,7 @@ router.get('/daily-report', async (req, res) => {
 // Report HTML Builder
 // ---------------------------------------------------------------------------
 
-function buildReportHtml(summary, totalEvents) {
+function buildReportHtml(summary, totalEvents, pipelineName) {
   const openedCount = summary.email_opened.length;
   const clickedCount = summary.email_link_clicked.length;
   const repliedCount = summary.reply_received.length;
@@ -110,7 +122,6 @@ function buildReportHtml(summary, totalEvents) {
         <tr>
           <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">${e.email}</td>
           <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">${label}</td>
-          <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">${e.campaignId || '—'}</td>
           <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">${new Date(e.timestamp).toLocaleString('en-US', { timeZone: 'America/New_York' })}</td>
           <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">
             <span style="padding: 2px 8px; border-radius: 4px; font-size: 12px; background: ${
@@ -119,8 +130,7 @@ function buildReportHtml(summary, totalEvents) {
               e.pipelineAction === 'created' ? '#2e7d32' : e.pipelineAction === 'moved' ? '#e65100' : '#757575'
             };">${e.pipelineAction || '—'} → ${e.stageName || '—'}</span>
           </td>
-        </tr>`
-      )
+        </tr>`)
       .join('');
 
   return `
@@ -130,7 +140,7 @@ function buildReportHtml(summary, totalEvents) {
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; color: #333;">
 
       <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 12px; padding: 24px; color: white; margin-bottom: 24px;">
-        <h1 style="margin: 0 0 4px 0; font-size: 22px;">📊 Daily Engagement Report</h1>
+        <h1 style="margin: 0 0 4px 0; font-size: 22px;">📊 ${pipelineName} — Daily Report</h1>
         <p style="margin: 0; opacity: 0.8; font-size: 14px;">Instantly.ai → GoHighLevel • Last 24 Hours</p>
       </div>
 
@@ -156,7 +166,6 @@ function buildReportHtml(summary, totalEvents) {
           <tr style="background: #f5f5f5;">
             <th style="padding: 10px 12px; text-align: left; border-bottom: 2px solid #ddd;">Email</th>
             <th style="padding: 10px 12px; text-align: left; border-bottom: 2px solid #ddd;">Event</th>
-            <th style="padding: 10px 12px; text-align: left; border-bottom: 2px solid #ddd;">Campaign</th>
             <th style="padding: 10px 12px; text-align: left; border-bottom: 2px solid #ddd;">Time (ET)</th>
             <th style="padding: 10px 12px; text-align: left; border-bottom: 2px solid #ddd;">Pipeline</th>
           </tr>
@@ -171,7 +180,7 @@ function buildReportHtml(summary, totalEvents) {
       ${totalEvents === 0 ? '<p style="text-align: center; color: #999; padding: 20px;">No engagement events in the last 24 hours.</p>' : ''}
 
       <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; font-size: 12px; color: #999; text-align: center;">
-        Celeritech Automation • Instantly.ai → GoHighLevel • Pipeline: Food man email
+        Celeritech Automation • Instantly.ai → GoHighLevel • Pipeline: ${pipelineName}
       </div>
 
     </body>
