@@ -98,20 +98,27 @@ router.post('/instantly', async (req, res) => {
       console.log(`[webhook] Tags added: ${tag}, instantly-campaign`);
     }
 
-    // ── 3. Create or move opportunity (forward-only) ──────────
-    const stageKey = config.eventToStage[eventType];
-    const pipelineResult = await ghl.createOrMoveOpportunity(contactId, stageKey, leadEmail);
-    console.log(`[webhook] Pipeline: ${pipelineResult.action} → ${pipelineResult.stage}`);
+    // ── 3. Resolve pipeline from campaign ID ──────────────────
+    const campaignId = payload.campaign_id;
+    const pipelineKey = config.campaignToPipeline[campaignId] || config.defaultPipeline;
+    const pipeline = config.ghl.pipelines[pipelineKey];
+    console.log(`[webhook] Campaign ${campaignId} → pipeline: ${pipeline.name}`);
 
-    // ── 4. Log event for daily report ─────────────────────────
+    // ── 4. Create or move opportunity (forward-only) ──────────
+    const stageKey = config.eventToStage[eventType];
+    const pipelineResult = await ghl.createOrMoveOpportunity(contactId, stageKey, leadEmail, pipeline);
+    console.log(`[webhook] Pipeline: ${pipelineResult.action} → ${pipelineResult.stage} (${pipeline.name})`);
+
+    // ── 5. Log event for daily report ─────────────────────────
     eventStore.logEvent({
       eventType,
       email: leadEmail,
-      campaignId: payload.campaign_id,
+      campaignId,
       timestamp: payload.timestamp,
       contactId,
       pipelineAction: pipelineResult.action,
       stageName: pipelineResult.stage,
+      pipelineName: pipeline.name,
     });
 
     const duration = Date.now() - startTime;

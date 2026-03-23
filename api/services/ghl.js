@@ -82,12 +82,14 @@ async function addTags(contactId, newTags = []) {
 
 /**
  * Search for an existing opportunity for a contact in the target pipeline.
+ * @param {string} contactId
+ * @param {object} pipeline - Pipeline config object with id, name, stages
  */
-async function getContactOpportunity(contactId) {
+async function getContactOpportunity(contactId, pipeline) {
   const url = new URL(`${config.ghl.baseUrl}/opportunities/search`);
   url.searchParams.set('location_id', config.ghl.locationId);
   url.searchParams.set('contact_id', contactId);
-  url.searchParams.set('pipeline_id', config.ghl.pipeline.id);
+  url.searchParams.set('pipeline_id', pipeline.id);
 
   const res = await fetch(url.toString(), {
     method: 'GET',
@@ -109,16 +111,16 @@ async function getContactOpportunity(contactId) {
 /**
  * Create a new opportunity at a given stage.
  */
-async function createOpportunity(contactId, stageKey, contactEmail) {
-  const stage = config.ghl.pipeline.stages[stageKey];
+async function createOpportunity(contactId, stageKey, contactEmail, pipeline) {
+  const stage = pipeline.stages[stageKey];
   if (!stage) throw new Error(`Unknown stage key: ${stageKey}`);
 
   const body = {
-    pipelineId: config.ghl.pipeline.id,
+    pipelineId: pipeline.id,
     locationId: config.ghl.locationId,
     pipelineStageId: stage.id,
     contactId,
-    name: `${contactEmail} — ${config.ghl.pipeline.name}`,
+    name: `${contactEmail} — ${pipeline.name}`,
     status: 'open',
   };
 
@@ -139,8 +141,8 @@ async function createOpportunity(contactId, stageKey, contactEmail) {
 /**
  * Move an existing opportunity to a new stage.
  */
-async function moveOpportunity(opportunityId, stageKey) {
-  const stage = config.ghl.pipeline.stages[stageKey];
+async function moveOpportunity(opportunityId, stageKey, pipeline) {
+  const stage = pipeline.stages[stageKey];
   if (!stage) throw new Error(`Unknown stage key: ${stageKey}`);
 
   const res = await fetch(`${config.ghl.baseUrl}/opportunities/${opportunityId}`, {
@@ -161,23 +163,27 @@ async function moveOpportunity(opportunityId, stageKey) {
  * Core logic: Create or move opportunity forward through the pipeline.
  * Never moves backward — if the contact is at a higher stage, the update is skipped.
  *
- * Returns { action: 'created' | 'moved' | 'skipped', stage: string }
+ * @param {string} contactId
+ * @param {string} targetStageKey - Stage key (opened, linkClicked, replied)
+ * @param {string} contactEmail
+ * @param {object} pipeline - Pipeline config object with id, name, stages
+ * Returns { action: 'created' | 'moved' | 'skipped', stage: string, pipeline: string }
  */
-async function createOrMoveOpportunity(contactId, targetStageKey, contactEmail) {
-  const targetStage = config.ghl.pipeline.stages[targetStageKey];
+async function createOrMoveOpportunity(contactId, targetStageKey, contactEmail, pipeline) {
+  const targetStage = pipeline.stages[targetStageKey];
   if (!targetStage) throw new Error(`Unknown stage key: ${targetStageKey}`);
 
-  const existingOpp = await getContactOpportunity(contactId);
+  const existingOpp = await getContactOpportunity(contactId, pipeline);
 
   if (!existingOpp) {
     // No opportunity yet — create one
-    await createOpportunity(contactId, targetStageKey, contactEmail);
-    return { action: 'created', stage: targetStage.name };
+    await createOpportunity(contactId, targetStageKey, contactEmail, pipeline);
+    return { action: 'created', stage: targetStage.name, pipeline: pipeline.name };
   }
 
   // Find current stage position
   const currentStageId = existingOpp.pipelineStageId;
-  const allStages = config.ghl.pipeline.stages;
+  const allStages = pipeline.stages;
   let currentPosition = -1;
 
   for (const key of Object.keys(allStages)) {
@@ -189,12 +195,12 @@ async function createOrMoveOpportunity(contactId, targetStageKey, contactEmail) 
 
   if (targetStage.position > currentPosition) {
     // Move forward
-    await moveOpportunity(existingOpp.id, targetStageKey);
-    return { action: 'moved', stage: targetStage.name };
+    await moveOpportunity(existingOpp.id, targetStageKey, pipeline);
+    return { action: 'moved', stage: targetStage.name, pipeline: pipeline.name };
   }
 
   // Already at same or higher stage — skip
-  return { action: 'skipped', stage: targetStage.name };
+  return { action: 'skipped', stage: targetStage.name, pipeline: pipeline.name };
 }
 
 // ---------------------------------------------------------------------------
