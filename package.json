@@ -1,0 +1,16 @@
+{
+  "name": "instantly-ghl-automation",
+  "version": "1.0.0",
+  "description": "Instantly.ai → GoHighLevel CRM automation (webhooks, pipeline, daily reports)",
+  "main": "api/index.js",
+  "scripts": {
+    "dev": "node api/index.js",
+    "start": "node api/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
