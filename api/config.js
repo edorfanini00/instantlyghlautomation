@@ -32,14 +32,23 @@ const config = {
           replied:     { id: '2d1d953b-85d9-4540-8ba7-00d8ededf522', position: 2, name: 'Replied' },
         },
       },
+      enterpryzeErpQualifiedEmail: {
+        id: 'eOYA9cv6FhbReAYhepII',
+        name: 'Enterpryze ERP qualified email',
+        stages: {
+          opened:      { id: '9b8cd0b1-b813-442e-b0c0-66899be0359c', position: 0, name: 'Opened' },
+          linkClicked: { id: 'dd55c5a9-1633-423f-8d98-026e832dcfc5', position: 1, name: 'Link clicked' },
+          replied:     { id: '0a99c145-ae8b-4c7f-8cdf-79491d16151c', position: 2, name: 'Replied' },
+        },
+      },
     },
   },
 
   // Instantly campaign ID → pipeline key mapping
   campaignToPipeline: {
-    'a6cafa42-cc9d-4806-b055-c5d17f3f3256': 'foodManEmail',       // Food man
-    '73bb0368-902a-406b-a1e3-4273b76c6d34': 'enterpryzeEmail',     // Enterpryze
-    '0dcb6b21-c54d-459d-b7f8-8de04aebd1c5': 'enterpryzeEmail',     // Qualified ERP Enterpryze
+    'a6cafa42-cc9d-4806-b055-c5d17f3f3256': 'foodManEmail',                  // Food man
+    '73bb0368-902a-406b-a1e3-4273b76c6d34': 'enterpryzeEmail',               // Enterpryze
+    '0dcb6b21-c54d-459d-b7f8-8de04aebd1c5': 'enterpryzeErpQualifiedEmail',   // Qualified ERP Enterpryze
   },
 
   // Default pipeline if campaign ID not mapped
