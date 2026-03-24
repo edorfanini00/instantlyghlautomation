@@ -34,7 +34,7 @@ const config = {
       },
       enterpryzeErpQualifiedEmail: {
         id: 'eOYA9cv6FhbReAYhepII',
-        name: 'Enterpryze ERP qualified email',
+        name: 'erp qualified email',
         stages: {
           opened:      { id: '9b8cd0b1-b813-442e-b0c0-66899be0359c', position: 0, name: 'Opened' },
           linkClicked: { id: 'dd55c5a9-1633-423f-8d98-026e832dcfc5', position: 1, name: 'Link clicked' },
@@ -48,7 +48,7 @@ const config = {
   campaignToPipeline: {
     'a6cafa42-cc9d-4806-b055-c5d17f3f3256': 'foodManEmail',                  // Food man
     '73bb0368-902a-406b-a1e3-4273b76c6d34': 'enterpryzeEmail',               // Enterpryze
-    '0dcb6b21-c54d-459d-b7f8-8de04aebd1c5': 'enterpryzeErpQualifiedEmail',   // Qualified ERP Enterpryze
+    '0dcb6b21-c54d-459d-b7f8-8de04aebd1c5': 'enterpryzeErpQualifiedEmail',   // Qualified Erp
   },
 
   // Default pipeline if campaign ID not mapped
