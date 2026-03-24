@@ -36,7 +36,7 @@ function saveEvents() {
 /**
  * Log a new engagement event.
  */
-function logEvent({ eventType, email, campaignId, timestamp, contactId, pipelineAction, stageName }) {
+function logEvent({ eventType, email, campaignId, timestamp, contactId, pipelineAction, stageName, pipelineName }) {
   loadEvents(); // Refresh from disk
 
   events.push({
@@ -46,6 +46,7 @@ function logEvent({ eventType, email, campaignId, timestamp, contactId, pipeline
     contactId: contactId || null,
     pipelineAction: pipelineAction || null,
     stageName: stageName || null,
+    pipelineName: pipelineName || null,
     timestamp: timestamp || new Date().toISOString(),
     loggedAt: new Date().toISOString(),
   });
