@@ -203,6 +203,56 @@ async function createOrMoveOpportunity(contactId, targetStageKey, contactEmail, 
   return { action: 'skipped', stage: targetStage.name, pipeline: pipeline.name };
 }
 
+/**
+ * Search opportunities in a pipeline within a date range.
+ * Uses GET /opportunities/search with pipeline_id, date, and endDate params.
+ * Paginates through all results automatically.
+ *
+ * @param {string} pipelineId
+ * @param {string} startDate - Format: mm-dd-yyyy
+ * @param {string} endDate   - Format: mm-dd-yyyy
+ * @returns {Array} All opportunities in that pipeline within the date range
+ */
+async function searchOpportunitiesByDate(pipelineId, startDate, endDate) {
+  const allOpportunities = [];
+  let page = 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    const url = new URL(`${config.ghl.baseUrl}/opportunities/search`);
+    url.searchParams.set('location_id', config.ghl.locationId);
+    url.searchParams.set('pipeline_id', pipelineId);
+    url.searchParams.set('date', startDate);
+    url.searchParams.set('endDate', endDate);
+    url.searchParams.set('limit', '100');
+    url.searchParams.set('page', String(page));
+
+    const res = await fetch(url.toString(), {
+      method: 'GET',
+      headers: GHL_HEADERS,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`GHL search opportunities by date failed (${res.status}): ${text}`);
+    }
+
+    const data = await res.json();
+    const opportunities = data.opportunities || [];
+    allOpportunities.push(...opportunities);
+
+    // Check if there are more pages
+    const meta = data.meta || {};
+    if (opportunities.length < 100 || page >= (meta.total ? Math.ceil(meta.total / 100) : page)) {
+      hasMore = false;
+    } else {
+      page++;
+    }
+  }
+
+  return allOpportunities;
+}
+
 // ---------------------------------------------------------------------------
 // Email (via Conversations API)
 // ---------------------------------------------------------------------------
@@ -282,6 +332,7 @@ module.exports = {
   createOpportunity,
   moveOpportunity,
   createOrMoveOpportunity,
+  searchOpportunitiesByDate,
   sendEmail,
   sendReportEmail,
 };
