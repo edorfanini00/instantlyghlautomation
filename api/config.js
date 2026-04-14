@@ -71,7 +71,6 @@ const config = {
   // Sales team for daily report
   salesTeamEmails: [
     'edoardo.orfanini@celeritech.biz',
-    'claudia.ochoa@celeritech.biz',
     'natalie.arana@celeritech.biz',
   ],
 
